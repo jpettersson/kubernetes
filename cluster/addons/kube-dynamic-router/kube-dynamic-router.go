@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	_ "time"
 
 	kapi "github.com/GoogleCloudPlatform/kubernetes/pkg/api"
@@ -70,15 +71,15 @@ func watchOnce(kubeClient *kclient.Client) {
 			log.Printf("Received update event: %#v", ev)
 		}
 		switch ev.Op {
-		case SetPods:
+		case SetPods, AddPod, UpdatePod:
 			for i := range ev.Pods {
 				p := &ev.Pods[i]
-				fmt.Printf("Set: %+v", p)
-			}
-		case AddPod:
-			for i := range ev.Pods {
-				p := &ev.Pods[i]
-				fmt.Printf("Add: %+v", p)
+				fmt.Printf("Set: %+v", ev.Op)
+
+				fqdn := p.Labels["fqdn"]
+
+				deleteEndpoint(fqdn)
+				writeEndpoint(fqdn)
 			}
 		case RemovePod:
 			for i := range ev.Pods {
@@ -87,7 +88,10 @@ func watchOnce(kubeClient *kclient.Client) {
 			}
 		}
 	}
+
+	reloadNginx()
 	//TODO: fully resync periodically.
+
 }
 
 func main() {
@@ -198,4 +202,27 @@ func sendUpdate(updates chan<- podUpdate, event kwatch.Event, pod *kapi.Pod) {
 	default:
 		log.Fatalf("Unknown event.Type: %v", event.Type)
 	}
+}
+
+func writeEndpoint(fqdn string) {
+  f, _ := os.Create("/nginx/sites-enabled/" + fqdn)
+  defer f.Close()
+
+  ip := "127.0.0.1"
+  port := "80"
+
+  endpoints := fmt.Sprintf("\tserver %s:%s;", ip, port)
+  upstream := fmt.Sprintf("upstream %s {\n %s\n}", fqdn, endpoints)
+
+  fmt.Printf(upstream)
+}
+
+func deleteEndpoint(fqdn string) {
+  if err := os.Remove("/nginx/sites-enabled/" + fqdn); err != nil {
+  	fmt.Printf("%v", err)
+  }
+}
+
+func reloadNginx() {
+  exec.Command("/service/nginxreloader")
 }
