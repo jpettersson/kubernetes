@@ -36,7 +36,7 @@ import (
 
 var (
 	verbose = flag.Bool("verbose", false, "log extra information")
-	label   = flag.String("label", "dynamic-router", "the label to match")
+	label   = flag.String("label", "website", "the label to match")
 )
 
 // TODO: evaluate using pkg/client/clientcmd
@@ -78,13 +78,14 @@ func watchOnce(kubeClient *kclient.Client) {
 
 				fmt.Printf("\n-------------\n")
 				fmt.Printf("  pod ip = %s", p.Status.PodIP)
+
 				if fqdn, ok := p.Labels["fqdn"]; ok {
 					fmt.Printf("  pod fqdn = %s", fqdn)
 					deleteEndpoint(fqdn)
-					writeEndpoint(fqdn)
+					writeEndpoint(fqdn, p.Status.PodIP, "80")
 				}
 				fmt.Printf("\n-------------\n")
-				fqdn := p.Labels["fqdn"]
+				// fqdn := p.Labels["fqdn"]
 			}
 		case RemovePod:
 			for i := range ev.Pods {
@@ -209,23 +210,23 @@ func sendUpdate(updates chan<- podUpdate, event kwatch.Event, pod *kapi.Pod) {
 	}
 }
 
-func writeEndpoint(fqdn string) {
+func writeEndpoint(fqdn string, ip string, port string) {
 	f, _ := os.Create("/nginx/sites-enabled/" + fqdn)
 	defer f.Close()
-
-	ip := "127.0.0.1"
-	port := "80"
 
 	endpoints := fmt.Sprintf("\tserver %s:%s;", ip, port)
 	upstream := fmt.Sprintf("upstream %s {\n %s\n}", fqdn, endpoints)
 
 	fmt.Printf(upstream)
+  fmt.Fprintf(f, upstream)
 }
 
 func deleteEndpoint(fqdn string) {
 	if err := os.Remove("/nginx/sites-enabled/" + fqdn); err != nil {
 		fmt.Printf("%v", err)
 	}
+
+	fmt.Printf("Deleted endpoint %v", fqdn)
 }
 
 func reloadNginx() {
