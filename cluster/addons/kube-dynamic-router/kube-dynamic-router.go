@@ -74,12 +74,17 @@ func watchOnce(kubeClient *kclient.Client) {
 		case SetPods, AddPod, UpdatePod:
 			for i := range ev.Pods {
 				p := &ev.Pods[i]
-				fmt.Printf("Set: %+v", ev.Op)
+				fmt.Printf("%v: %+v", ev.Op, p)
 
+				fmt.Printf("\n-------------\n")
+				fmt.Printf("  pod ip = %s", p.Status.PodIP)
+				if fqdn, ok := p.Labels["fqdn"]; ok {
+					fmt.Printf("  pod fqdn = %s", fqdn)
+					deleteEndpoint(fqdn)
+					writeEndpoint(fqdn)
+				}
+				fmt.Printf("\n-------------\n")
 				fqdn := p.Labels["fqdn"]
-
-				deleteEndpoint(fqdn)
-				writeEndpoint(fqdn)
 			}
 		case RemovePod:
 			for i := range ev.Pods {
@@ -150,7 +155,7 @@ func startWatching(watcher podsWatcher, updates chan<- podUpdate) {
 func watchLoop(podWatcher podsWatcher, updates chan<- podUpdate) {
 	defer close(updates)
 
-	pods, err := podWatcher.List(klabels.Everything())
+	pods, err := podWatcher.List(klabels.OneTermEqualSelector("name", *label))
 	if err != nil {
 		log.Printf("Failed to load pods: %v", err)
 		return
@@ -158,7 +163,7 @@ func watchLoop(podWatcher podsWatcher, updates chan<- podUpdate) {
 	resourceVersion := pods.ResourceVersion
 	updates <- podUpdate{Op: SetPods, Pods: pods.Items}
 
-	watcher, err := podWatcher.Watch(klabels.Everything(), klabels.Everything(), resourceVersion)
+	watcher, err := podWatcher.Watch(klabels.OneTermEqualSelector("name", *label), klabels.Everything(), resourceVersion)
 	if err != nil {
 		log.Printf("Failed to watch for pod changes: %v", err)
 		return
@@ -205,24 +210,24 @@ func sendUpdate(updates chan<- podUpdate, event kwatch.Event, pod *kapi.Pod) {
 }
 
 func writeEndpoint(fqdn string) {
-  f, _ := os.Create("/nginx/sites-enabled/" + fqdn)
-  defer f.Close()
+	f, _ := os.Create("/nginx/sites-enabled/" + fqdn)
+	defer f.Close()
 
-  ip := "127.0.0.1"
-  port := "80"
+	ip := "127.0.0.1"
+	port := "80"
 
-  endpoints := fmt.Sprintf("\tserver %s:%s;", ip, port)
-  upstream := fmt.Sprintf("upstream %s {\n %s\n}", fqdn, endpoints)
+	endpoints := fmt.Sprintf("\tserver %s:%s;", ip, port)
+	upstream := fmt.Sprintf("upstream %s {\n %s\n}", fqdn, endpoints)
 
-  fmt.Printf(upstream)
+	fmt.Printf(upstream)
 }
 
 func deleteEndpoint(fqdn string) {
-  if err := os.Remove("/nginx/sites-enabled/" + fqdn); err != nil {
-  	fmt.Printf("%v", err)
-  }
+	if err := os.Remove("/nginx/sites-enabled/" + fqdn); err != nil {
+		fmt.Printf("%v", err)
+	}
 }
 
 func reloadNginx() {
-  exec.Command("/service/nginxreloader")
+	exec.Command("/service/nginxreloader")
 }
