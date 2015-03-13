@@ -96,7 +96,6 @@ func watchOnce(kubeClient *kclient.Client) {
 	}
 
 	reloadNginx()
-	//TODO: fully resync periodically.
 
 }
 
@@ -211,24 +210,34 @@ func sendUpdate(updates chan<- podUpdate, event kwatch.Event, pod *kapi.Pod) {
 }
 
 func writeEndpoint(fqdn string, ip string, port string) {
-	f, _ := os.Create("/nginx/sites-enabled/" + fqdn)
+	f, err := os.Create("/etc/nginx/sites-enabled/" + fqdn)
+	if err != nil {
+		fmt.Print(err)
+	}
+
 	defer f.Close()
 
 	endpoints := fmt.Sprintf("\tserver %s:%s;", ip, port)
 	upstream := fmt.Sprintf("upstream %s {\n %s\n}", fqdn, endpoints)
 
 	fmt.Printf(upstream)
-  fmt.Fprintf(f, upstream)
+	f.WriteString(upstream)
 }
 
 func deleteEndpoint(fqdn string) {
-	if err := os.Remove("/nginx/sites-enabled/" + fqdn); err != nil {
-		fmt.Printf("%v", err)
+	if err := os.Remove("/etc/nginx/sites-enabled/" + fqdn); err != nil {
+		fmt.Print(err)
 	}
 
 	fmt.Printf("Deleted endpoint %v", fqdn)
 }
 
 func reloadNginx() {
-	exec.Command("/service/nginxreloader")
+	out, err := exec.Command("sh","-c", "/service/scripts/nginxreloader").Output()
+
+	if err != nil {
+		fmt.Print(err)
+	}
+
+	fmt.Print(out)
 }
