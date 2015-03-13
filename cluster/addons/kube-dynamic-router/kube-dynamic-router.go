@@ -77,6 +77,11 @@ func watchOnce(kubeClient *kclient.Client) {
 				fmt.Printf("%v: %+v", ev.Op, p)
 
 				fmt.Printf("\n-------------\n")
+				if p.Status.PodIP == "" {
+					fmt.Print("Pod IP unknown, skipping..")
+					continue
+				}
+
 				fmt.Printf("  pod ip = %s", p.Status.PodIP)
 
 				if fqdn, ok := p.Labels["fqdn"]; ok {
