@@ -36,7 +36,7 @@ import (
 
 var (
 	verbose = flag.Bool("verbose", false, "log extra information")
-	label   = flag.String("label", "website", "the label to match")
+	label   = flag.String("label", "auto-routable", "the label to match")
 )
 
 // TODO: evaluate using pkg/client/clientcmd
@@ -155,7 +155,7 @@ func startWatching(watcher podsWatcher, updates chan<- podUpdate) {
 func watchLoop(podWatcher podsWatcher, updates chan<- podUpdate) {
 	defer close(updates)
 
-	pods, err := podWatcher.List(klabels.OneTermEqualSelector("name", *label))
+	pods, err := podWatcher.List(klabels.OneTermEqualSelector("type", *label))
 	if err != nil {
 		log.Printf("Failed to load pods: %v", err)
 		return
@@ -163,7 +163,7 @@ func watchLoop(podWatcher podsWatcher, updates chan<- podUpdate) {
 	resourceVersion := pods.ResourceVersion
 	updates <- podUpdate{Op: SetPods, Pods: pods.Items}
 
-	watcher, err := podWatcher.Watch(klabels.OneTermEqualSelector("name", *label), klabels.Everything(), resourceVersion)
+	watcher, err := podWatcher.Watch(klabels.OneTermEqualSelector("type", *label), klabels.Everything(), resourceVersion)
 	if err != nil {
 		log.Printf("Failed to watch for pod changes: %v", err)
 		return
