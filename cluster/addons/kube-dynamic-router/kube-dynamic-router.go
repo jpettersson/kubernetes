@@ -87,15 +87,20 @@ func watchOnce(kubeClient *kclient.Client) {
 				fmt.Printf("\n-------------\n")
 				// fqdn := p.Labels["fqdn"]
 			}
+
+			reloadNginx()
 		case RemovePod:
 			for i := range ev.Pods {
 				p := &ev.Pods[i]
-				fmt.Printf("Remove: %+v", p)
+				if fqdn, ok := p.Labels["fqdn"]; ok {
+					fmt.Printf("Deleting endpoint = %s", fqdn)
+					deleteEndpoint(fqdn)
+				}
 			}
+
+			reloadNginx()
 		}
 	}
-
-	reloadNginx()
 
 }
 
@@ -233,6 +238,8 @@ func deleteEndpoint(fqdn string) {
 }
 
 func reloadNginx() {
+	fmt.Print("Reloading nginx...")
+
 	out, err := exec.Command("sh","-c", "/service/scripts/nginxreloader").Output()
 
 	if err != nil {
